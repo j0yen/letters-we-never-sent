@@ -53,7 +53,7 @@ strip = "debuginfo"
 panic = "abort"
 
 [[bin]]
-name = "letter"
+name = "letter-curate"
 path = "src/main.rs"
 
 [dependencies]
