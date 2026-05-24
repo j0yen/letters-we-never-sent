@@ -13,10 +13,54 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::doc_markdown)]
 
+use std::process::Command;
+
 #[test]
 fn acceptance_ac5() {
-    // edit-agent: replace this stub with a real assertion. The
-    // panic keeps the test failing until you do, so the loop
-    // sees a real Stage 3 signal.
-    panic!("AC AC5 not yet implemented — see file header");
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    // No frontmatter at all.
+    std::fs::write(root.join("plain.md"), "just a plain markdown\n").unwrap();
+    // Malformed YAML.
+    std::fs::write(
+        root.join("bad.md"),
+        "---\nstate: pending\nbroken: [unterminated\n---\nbody\n",
+    )
+    .unwrap();
+    // One valid one (so list has a clean baseline too).
+    std::fs::write(
+        root.join("ok.md"),
+        "---\nstate: pending\n---\nbody\n",
+    )
+    .unwrap();
+
+    // list --state all surfaces (unparseable) tag without crashing.
+    let out = Command::new(env!("CARGO_BIN_EXE_letter"))
+        .args(["list", "--state", "all", "--root"])
+        .arg(root)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "list crashed on malformed input: {out:?}");
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(stdout.contains("(unparseable)"), "unparseable tag missing: {stdout:?}");
+    assert!(stdout.contains("plain.md"), "no-frontmatter file missing from list");
+    assert!(stdout.contains("bad.md"), "malformed-yaml file missing from list");
+
+    // accept on a malformed file: exit code 3, stderr has parse explanation.
+    let out = Command::new(env!("CARGO_BIN_EXE_letter"))
+        .args(["accept", "bad.md", "--root"])
+        .arg(root)
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(3), "expected exit 3, got {:?}", out.status.code());
+    let stderr = String::from_utf8(out.stderr).unwrap();
+    assert!(stderr.contains("unparseable") || stderr.contains("yaml"), "stderr lacks reason: {stderr:?}");
+
+    // decline on a no-frontmatter file: also exit 3.
+    let out = Command::new(env!("CARGO_BIN_EXE_letter"))
+        .args(["decline", "plain.md", "--root"])
+        .arg(root)
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(3), "decline expected exit 3");
 }

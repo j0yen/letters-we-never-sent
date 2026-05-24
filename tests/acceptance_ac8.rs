@@ -13,10 +13,40 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::doc_markdown)]
 
+use std::process::Command;
+
 #[test]
 fn acceptance_ac8() {
-    // edit-agent: replace this stub with a real assertion. The
-    // panic keeps the test failing until you do, so the loop
-    // sees a real Stage 3 signal.
-    panic!("AC AC8 not yet implemented — see file header");
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let path = root.join("01.md");
+    std::fs::write(&path, "---\nstate: pending\n---\nbody\n").unwrap();
+
+    // Use POSIX `true` as the editor — exits 0 without touching the file.
+    let out = Command::new(env!("CARGO_BIN_EXE_letter"))
+        .env("EDITOR", "true")
+        .args(["open", "01.md", "--root"])
+        .arg(root)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "open with EDITOR=true failed: {out:?}");
+    assert_eq!(out.status.code(), Some(0));
+
+    // Non-zero editor exit propagates.
+    let out = Command::new(env!("CARGO_BIN_EXE_letter"))
+        .env("EDITOR", "false")
+        .args(["open", "01.md", "--root"])
+        .arg(root)
+        .output()
+        .unwrap();
+    assert!(!out.status.success(), "open should propagate non-zero from editor");
+
+    // Missing file errors.
+    let out = Command::new(env!("CARGO_BIN_EXE_letter"))
+        .env("EDITOR", "true")
+        .args(["open", "missing.md", "--root"])
+        .arg(root)
+        .output()
+        .unwrap();
+    assert!(!out.status.success(), "missing file should error");
 }

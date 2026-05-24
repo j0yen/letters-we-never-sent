@@ -13,10 +13,40 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::doc_markdown)]
 
+use std::process::Command;
+
 #[test]
 fn acceptance_ac3() {
-    // edit-agent: replace this stub with a real assertion. The
-    // panic keeps the test failing until you do, so the loop
-    // sees a real Stage 3 signal.
-    panic!("AC AC3 not yet implemented — see file header");
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let path = root.join("01.md");
+    // Body crafted with mixed whitespace + em-dashes the curator may have
+    // typed and the tool must NOT touch.
+    let body = "Dear PM,\n\n  indented line — with em-dash.\n\nLast line, no trailing newline.";
+    let original = format!(
+        "---\nrecipient: the PM\nmonth: 2026-05\nstate: pending\naccepted_at: null\nsubject: \"On lateness\"\n---\n{body}"
+    );
+    std::fs::write(&path, &original).unwrap();
+
+    let out = Command::new(env!("CARGO_BIN_EXE_letter"))
+        .args(["accept", "01.md", "--root"])
+        .arg(root)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "accept exit non-zero: {out:?}");
+    assert_eq!(out.status.code(), Some(0));
+
+    let after = std::fs::read_to_string(&path).unwrap();
+    assert!(after.contains("state: accepted"), "state not updated: {after:?}");
+    assert!(!after.contains("accepted_at: null"), "accepted_at still null: {after:?}");
+    // RFC3339 marker for Utc — last char must be 'Z' after a timestamp.
+    assert!(
+        after.contains("accepted_at: ") && after.contains('Z'),
+        "no rfc3339 marker: {after:?}"
+    );
+
+    // Body bytes preserved verbatim AFTER closing ---\n.
+    let body_start = after.find("\n---\n").map(|i| i + 5).unwrap();
+    let body_after = &after[body_start..];
+    assert_eq!(body_after, body, "body bytes mutated");
 }

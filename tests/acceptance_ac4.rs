@@ -13,10 +13,63 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::doc_markdown)]
 
+use std::path::Path;
+use std::process::Command;
+
+fn run(args: &[&str], root: &Path) -> std::process::Output {
+    Command::new(env!("CARGO_BIN_EXE_letter"))
+        .args(args)
+        .arg("--root")
+        .arg(root)
+        .output()
+        .unwrap()
+}
+
 #[test]
 fn acceptance_ac4() {
-    // edit-agent: replace this stub with a real assertion. The
-    // panic keeps the test failing until you do, so the loop
-    // sees a real Stage 3 signal.
-    panic!("AC AC4 not yet implemented — see file header");
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let body = "DECLINED BODY — keep me verbatim.\n";
+    let mk = |name: &str| {
+        let p = root.join(name);
+        std::fs::write(
+            &p,
+            format!("---\nstate: pending\naccepted_at: null\n---\n{body}"),
+        )
+        .unwrap();
+        p
+    };
+
+    // decline
+    let p1 = mk("a.md");
+    let out = run(&["decline", "a.md"], root);
+    assert!(out.status.success(), "decline failed: {out:?}");
+    let after = std::fs::read_to_string(&p1).unwrap();
+    assert!(after.contains("state: declined"), "decline state missing");
+    let body_start = after.find("\n---\n").map(|i| i + 5).unwrap();
+    assert_eq!(&after[body_start..], body, "decline mutated body");
+
+    // mark-send-real
+    let p2 = mk("b.md");
+    let out = run(&["mark-send-real", "b.md"], root);
+    assert!(out.status.success(), "mark-send-real failed: {out:?}");
+    let after = std::fs::read_to_string(&p2).unwrap();
+    assert!(after.contains("state: send-real"), "send-real state missing: {after:?}");
+    let body_start = after.find("\n---\n").map(|i| i + 5).unwrap();
+    assert_eq!(&after[body_start..], body, "send-real mutated body");
+
+    // Idempotency: re-running accept twice succeeds; state stays accepted,
+    // accepted_at refreshes but body is unchanged.
+    let p3 = mk("c.md");
+    let out = run(&["accept", "c.md"], root);
+    assert!(out.status.success());
+    let first = std::fs::read_to_string(&p3).unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    let out = run(&["accept", "c.md"], root);
+    assert!(out.status.success(), "second accept failed: {out:?}");
+    let second = std::fs::read_to_string(&p3).unwrap();
+    assert!(second.contains("state: accepted"), "second accept lost state");
+    let body_start = second.find("\n---\n").map(|i| i + 5).unwrap();
+    assert_eq!(&second[body_start..], body, "idempotent mutate touched body");
+    assert_ne!(first, second, "accepted_at did not refresh");
 }

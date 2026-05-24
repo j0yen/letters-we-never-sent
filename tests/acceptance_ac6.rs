@@ -13,10 +13,51 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::doc_markdown)]
 
+use std::process::Command;
+
 #[test]
 fn acceptance_ac6() {
-    // edit-agent: replace this stub with a real assertion. The
-    // panic keeps the test failing until you do, so the loop
-    // sees a real Stage 3 signal.
-    panic!("AC AC6 not yet implemented — see file header");
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let path = root.join("01.md");
+    std::fs::write(&path, "---\nstate: pending\n---\nbody\n").unwrap();
+
+    // Relative path resolves against --root.
+    let out = Command::new(env!("CARGO_BIN_EXE_letter"))
+        .args(["accept", "01.md", "--root"])
+        .arg(root)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "relative path failed: {out:?}");
+    assert!(std::fs::read_to_string(&path).unwrap().contains("state: accepted"));
+
+    // Reset.
+    std::fs::write(&path, "---\nstate: pending\n---\nbody\n").unwrap();
+
+    // Absolute path works without --root.
+    let out = Command::new(env!("CARGO_BIN_EXE_letter"))
+        .arg("decline")
+        .arg(&path)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "absolute path failed: {out:?}");
+    assert!(std::fs::read_to_string(&path).unwrap().contains("state: declined"));
+
+    // Glob argument is NOT auto-expanded — it's passed through as a literal
+    // filename and the file does not exist, so the command must error
+    // (NOT silently match 01.md).
+    let out = Command::new(env!("CARGO_BIN_EXE_letter"))
+        .args(["accept", "*.md", "--root"])
+        .arg(root)
+        .output()
+        .unwrap();
+    assert!(!out.status.success(), "glob silently matched: {out:?}");
+
+    // Multiple positional filenames are rejected by clap.
+    let out = Command::new(env!("CARGO_BIN_EXE_letter"))
+        .args(["accept", "01.md", "02.md", "--root"])
+        .arg(root)
+        .output()
+        .unwrap();
+    assert!(!out.status.success(), "multiple filenames accepted: {out:?}");
 }

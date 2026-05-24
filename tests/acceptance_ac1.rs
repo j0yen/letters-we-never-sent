@@ -13,10 +13,63 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::doc_markdown)]
 
+use std::process::Command;
+
 #[test]
 fn acceptance_ac1() {
-    // edit-agent: replace this stub with a real assertion. The
-    // panic keeps the test failing until you do, so the loop
-    // sees a real Stage 3 signal.
-    panic!("AC AC1 not yet implemented — see file header");
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let year_dir = root.join("2026");
+    std::fs::create_dir_all(&year_dir).unwrap();
+    std::fs::write(
+        year_dir.join("01.md"),
+        "---\nrecipient: the friend\nmonth: 2026-05\nstate: pending\naccepted_at: null\nsubject: \"On lateness\"\n---\nbody one\n",
+    )
+    .unwrap();
+    std::fs::write(
+        year_dir.join("02.md"),
+        "---\nrecipient: the boss\nmonth: 2026-05\nstate: accepted\naccepted_at: \"2026-05-23T00:00:00Z\"\nsubject: \"Resign\"\n---\nbody two\n",
+    )
+    .unwrap();
+
+    let out = Command::new(env!("CARGO_BIN_EXE_letter"))
+        .args(["list", "--root"])
+        .arg(root)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "list failed: {out:?}");
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(stdout.contains("01.md"), "pending letter missing: {stdout:?}");
+    assert!(stdout.contains("pending"), "state column missing: {stdout:?}");
+    assert!(stdout.contains("On lateness"), "subject missing: {stdout:?}");
+    assert!(stdout.contains(" -  "), "accepted_at placeholder missing: {stdout:?}");
+    assert!(!stdout.contains("02.md"), "accepted leaked into default: {stdout:?}");
+
+    let out = Command::new(env!("CARGO_BIN_EXE_letter"))
+        .args(["list", "--state", "accepted", "--root"])
+        .arg(root)
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(stdout.contains("02.md"), "accepted not shown: {stdout:?}");
+    assert!(!stdout.contains("01.md"), "pending leaked: {stdout:?}");
+
+    let out = Command::new(env!("CARGO_BIN_EXE_letter"))
+        .args(["list", "--state", "all", "--root"])
+        .arg(root)
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(
+        stdout.contains("01.md") && stdout.contains("02.md"),
+        "all filter missed: {stdout:?}"
+    );
+
+    let out = Command::new(env!("CARGO_BIN_EXE_letter"))
+        .args(["list", "--state", "all", "--year", "2026", "--root"])
+        .arg(root)
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(stdout.contains("01.md"), "year filter dropped 2026: {stdout:?}");
 }

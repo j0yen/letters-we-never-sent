@@ -1,8 +1,18 @@
-//! letters-we-never-sent — autobuilder-scaffolded library.
+//! letters-we-never-sent — curation library for Markdown letters with
+//! YAML frontmatter.
 //!
-//! Generated stub. The edit-agent replaces this body across iterations.
-//!
-//! When `target_kind == cli`, this file is overwritten or removed by the
-//! scaffold step. When `target_kind == lib`, this is the primary surface.
+//! The library splits each letter into a parsed [`frontmatter::Frontmatter`]
+//! plus a verbatim body byte buffer, and provides the mutation helpers used
+//! by the `letter` binary. Body bytes are preserved across edits.
 
 #![cfg_attr(not(test), forbid(unsafe_code))]
+
+pub mod cli;
+pub mod error;
+pub mod frontmatter;
+pub mod letter;
+pub mod listing;
+pub mod state;
+
+pub use error::{LetterError, LetterResult};
+pub use state::State;

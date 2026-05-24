@@ -13,10 +13,57 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::doc_markdown)]
 
+use letters_we_never_sent::frontmatter;
+use letters_we_never_sent::state::State;
+use std::path::Path;
+use std::process::Command;
+
 #[test]
 fn acceptance_ac2() {
-    // edit-agent: replace this stub with a real assertion. The
-    // panic keeps the test failing until you do, so the loop
-    // sees a real Stage 3 signal.
-    panic!("AC AC2 not yet implemented — see file header");
+    let raw = b"---\nrecipient: the PM\nmonth: 2026-05\nstate: pending\naccepted_at: null\nsubject: \"On lateness\"\n---\nDear PM,\n\nbody\n";
+    let doc = frontmatter::parse(raw, Path::new("fixture.md")).unwrap();
+    assert_eq!(doc.front.recipient.as_deref(), Some("the PM"));
+    assert_eq!(doc.front.month.as_deref(), Some("2026-05"));
+    assert_eq!(doc.front.state, State::Pending);
+    assert_eq!(doc.front.accepted_at, None);
+    assert_eq!(doc.front.subject.as_deref(), Some("On lateness"));
+
+    // Default state is pending when omitted.
+    let raw2 = b"---\nrecipient: the PM\nmonth: 2026-05\n---\nbody\n";
+    let doc2 = frontmatter::parse(raw2, Path::new("fixture2.md")).unwrap();
+    assert_eq!(doc2.front.state, State::Pending);
+
+    // All four state strings round-trip.
+    for s in ["pending", "accepted", "declined", "send-real"] {
+        let raw = format!("---\nstate: {s}\n---\nbody\n");
+        let doc = frontmatter::parse(raw.as_bytes(), Path::new("rt.md")).unwrap();
+        assert_eq!(doc.front.state.as_str(), s, "round-trip for {s}");
+    }
+
+    // Subject column falls back to first H1 when subject absent.
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("nosub.md");
+    std::fs::write(
+        &path,
+        "---\nrecipient: x\nmonth: 2026-05\nstate: pending\n---\n# A real h1\nbody\n",
+    )
+    .unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_letter"))
+        .args(["list", "--state", "all", "--root"])
+        .arg(tmp.path())
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(stdout.contains("A real h1"), "h1 fallback failed: {stdout:?}");
+
+    // Filename fallback when both subject and h1 are absent.
+    let path2 = tmp.path().join("plain.md");
+    std::fs::write(&path2, "---\nstate: pending\n---\nbody only\n").unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_letter"))
+        .args(["list", "--state", "all", "--root"])
+        .arg(tmp.path())
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(stdout.contains("plain.md"), "filename fallback failed: {stdout:?}");
 }
