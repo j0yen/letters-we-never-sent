@@ -52,7 +52,17 @@ codegen-units = 1
 strip = "debuginfo"
 panic = "abort"
 
+[[bin]]
+name = "letter"
+path = "src/main.rs"
+
 [dependencies]
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_yml = "0.0.12"
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
+thiserror = "2"
 
 [dev-dependencies]
 proptest = "1"
+tempfile = "3"
