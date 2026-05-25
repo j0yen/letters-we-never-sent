@@ -2,6 +2,24 @@
 
 > The monthly draft ritual produces 2-4 letter Markdown files per month in ~/.claude/letters-we-never-sent/<year>/.
 
+## Install
+
+### One-liner
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/j0yen/letters-we-never-sent/main/install.sh | bash
+```
+
+### Manual
+
+```sh
+git clone --depth 1 https://github.com/j0yen/letters-we-never-sent.git
+cd letters-we-never-sent
+./install.sh
+```
+
+Installs the `letter-curate` binary via `cargo install --path . --locked`. Requires `cargo` / `rustc 1.85+` and `git`. Built binary lands in `~/.cargo/bin/`.
+
 ## Why
 
 The monthly draft ritual produces 2-4 letter Markdown files per month in ~/.claude/letters-we-never-sent/<year>/. Phase 1 is the curation tool the author needs to triage drafts: read, accept/decline/edit, optionally mark `send-for-real`. Without it, drafts accumulate in a directory and the annual binding ritual has no signal for which letters made the cut.
