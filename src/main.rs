@@ -47,5 +47,10 @@ fn dispatch(cmd: Command) -> letters_we_never_sent::LetterResult<u8> {
             let clamped = c.clamp(0, 255);
             Ok(u8::try_from(clamped).unwrap_or(1))
         }
+        Command::Curate(a) => {
+            let s = cli::run_curate(a)?;
+            print!("{s}");
+            Ok(0)
+        }
     }
 }

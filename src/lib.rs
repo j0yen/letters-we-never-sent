@@ -7,6 +7,8 @@
 
 #![cfg_attr(not(test), forbid(unsafe_code))]
 
+pub mod cadence_intake;
+pub mod cadence_record;
 pub mod cli;
 pub mod error;
 pub mod frontmatter;
