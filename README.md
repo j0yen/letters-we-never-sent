@@ -1,16 +1,18 @@
 # letters-we-never-sent
 
-> The monthly draft ritual produces 2-4 letter Markdown files per month in ~/.claude/letters-we-never-sent/<year>/.
+A small CLI for triaging the letters you draft but don't send — list them, accept or decline each one, and roll a year's worth into a single Markdown file for the annual binding.
+
+## Why it exists
+
+The monthly draft ritual leaves a directory full of letters: two to four Markdown files a month, addressed to people they'll never reach. Left alone, they just accumulate, and the year-end binding has no way to know which ones mattered. This tool is the triage step. It reads the drafts, lets you mark each one accepted, declined, or `send-real`, and records the decision in the file's own frontmatter — so the next pass, and the annual aggregate, have a signal to work from. It edits frontmatter only; the body of a letter is preserved byte for byte.
 
 ## Install
-
-### One-liner
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/j0yen/letters-we-never-sent/main/install.sh | bash
 ```
 
-### Manual
+Or from a checkout:
 
 ```sh
 git clone --depth 1 https://github.com/j0yen/letters-we-never-sent.git
@@ -18,52 +20,52 @@ cd letters-we-never-sent
 ./install.sh
 ```
 
-Installs the `letter-curate` binary via `cargo install --path . --locked`. Requires `cargo` / `rustc 1.85+` and `git`. Built binary lands in `~/.cargo/bin/`.
+`install.sh` runs `cargo install --path . --locked`, which puts the `letter` binary (and an alias, `letter-curate`) in `~/.cargo/bin/`. Needs `cargo` / `rustc` ≥ 1.85 and `git`.
 
-## Why
+## A letter
 
-The monthly draft ritual produces 2-4 letter Markdown files per month in ~/.claude/letters-we-never-sent/<year>/. Phase 1 is the curation tool the author needs to triage drafts: read, accept/decline/edit, optionally mark `send-for-real`. Without it, drafts accumulate in a directory and the annual binding ritual has no signal for which letters made the cut.
+Each letter is a Markdown file with YAML frontmatter:
 
-## Build
+```markdown
+---
+recipient: the PM
+month: 2026-05
+state: pending
+---
 
-```sh
-cargo build --release
+Body text, preserved exactly as written.
 ```
 
-Produces `target/release/letter`. Symlink into `~/.local/bin/` if you want it on `$PATH`.
+`state` is one of `pending`, `accepted`, `declined`, `send-real` (default `pending`); `accepted_at` is stamped in RFC 3339 when the state changes. Files with no frontmatter or malformed YAML aren't a crash — `list` shows them as `(unparseable)` and state changes refuse them with a clear error.
 
-## Usage
+## Quickstart
+
+The default root is `~/.claude/letters-we-never-sent/`; override it anywhere with `--root`.
 
 ```sh
-letter --help
+letter list                         # pending letters: filename, state, accepted-at, subject
+letter list --year 2026 --state all
+letter accept 2026-05-03.md         # set state=accepted, stamp accepted_at
+letter decline 2026-05-04.md
+letter mark-send-real 2026-05-01.md # the rare one you actually mean to send
+letter open 2026-05-03.md           # open in $EDITOR (falls back to vi)
+letter stats --year 2026            # counts by state
 ```
 
-## Audience
+Filenames are positional — relative to the root or absolute. Globs are not expanded; let the shell do that. The state transitions are idempotent: running `accept` twice leaves the same result.
 
-the author at the end of each month (or whenever the practice calls), running the curation CLI over ~/.claude/letters-we-never-sent/<year>/ to triage drafts before the annual binding ritual. Audience: the author himself, alone, in a focused reading session.
+## Curate — the annual roll-up
 
-## Acceptance criteria
+```sh
+letter curate --year 2026
+```
 
-This project was scaffolded from a PRD via the `autobuilder` pipeline. The MUST-level acceptance criteria are:
+`curate` gathers the year's letters, writes a monthly aggregate (`<year>-aggregate.md` by default, or `--output <path>`), and prints the per-state counts. It can also pull weekly cadence records from [`confidant`](https://github.com/j0yen/confidant) as additional intake — on by default when the cadence substrate is present, windowed by `--cadence-since 30d`, suppressible with `--no-cadence-record`. If confidant isn't installed, curate notes it on stderr and proceeds with the local letters alone. Use `--print-sources` to see every file it considered.
 
-- **AC1**: `letter list [--root <dir>] [--year <YYYY>] [--state <all|pending|accepted|declined|send-real>]` prints a one-line-per-letter table to stdout: `<filename> <state> <accepted_at|-> <subject-line>`. Default --root = `~/.claude/letters-we-ne...
-- **AC2**: Each letter is a Markdown file with YAML frontmatter. Recognised frontmatter keys: `recipient` (anonymized, e.g. `the PM`), `month` (YYYY-MM), `state` (one of `pending|accepted|declined|send-real`, default `pending`), `accepted_at` (RFC3...
-- **AC3**: `letter accept <filename> [--root <dir>]` rewrites the file's frontmatter to set state=accepted and accepted_at=now(RFC3339). The body content is preserved byte-for-byte after the frontmatter. Exit 0 on success.
-- **AC4**: `letter decline <filename> [--root <dir>]` sets state=declined and accepted_at=now. Same byte-for-byte body preservation. `letter mark-send-real <filename>` sets state=send-real. All three state transitions are idempotent (re-running the...
-- **AC5**: Letters without frontmatter, or with malformed YAML, are surfaced in `list` output as state=`(unparseable)` and skipped from state changes (`accept`/`decline` exits 3 with stderr explaining why). The CLI never crashes on malformed input.
-- **AC6**: Filenames are positional arguments; both relative-to-root (`NN.md`) and absolute paths are accepted. Glob patterns (e.g. `2026-05-*.md`) are NOT auto-expanded — the user uses shell globbing for that. Single filename per invocation.
+## Where it fits
 
-Each AC has a matching integration test under `tests/acceptance_ac<n>.rs`.
-
-## Provenance
-
-Built via the [`autobuilder`](https://github.com/j0yen/autobuilder) pipeline (PRD intake -> intent-card -> scaffold -> iterate-and-prove). Originally consolidated as a subdir of the [`wintermute`](https://github.com/j0yen/wintermute) monorepo; this standalone repo is a fresh-init snapshot for easier consumption and distribution.
+`letter` curates; [`confidant`](https://github.com/j0yen/confidant) supplies the weekly cadence records that `curate` can fold in. Both are part of the wintermute personal-tooling fleet, built through the [`autobuilder`](https://github.com/j0yen/autobuilder) pipeline.
 
 ## License
 
-Licensed under either of:
-
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
-- MIT license ([LICENSE-MIT](LICENSE-MIT))
-
-at your option.
+MIT OR Apache-2.0 — see [LICENSE-MIT](LICENSE-MIT) and [LICENSE-APACHE](LICENSE-APACHE).
